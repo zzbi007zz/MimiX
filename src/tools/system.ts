@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { spawnSync } from "bun";
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, cpSync, renameSync, rmSync } from "fs";
 import { dirname } from "path";
 
 // ── Bash Command Execution ────────────────────────────────────────────────────
@@ -167,4 +167,114 @@ export const listDirectory = tool({
     },
 });
 
-export const systemTools = { runBashCommand, readFile, writeFile, listDirectory };
+// ── Move File ─────────────────────────────────────────────────────────────────
+
+export const moveFile = tool({
+    description: "Move or rename a file or directory on the local filesystem.",
+    parameters: z.object({
+        source: z.string().describe("Absolute or relative path to the existing file/directory"),
+        destination: z.string().describe("Absolute or relative path to the new location"),
+    }),
+    // @ts-expect-error: Vercel AI SDK Zod inference bug
+    execute: async ({ source, destination }: any) => {
+        try {
+            if (!existsSync(source)) return { error: `Source not found: ${source}` };
+
+            const destDir = dirname(destination);
+            if (!existsSync(destDir)) mkdirSync(destDir, { recursive: true });
+
+            renameSync(source, destination);
+            return { success: true, source, destination };
+        } catch (err) {
+            return { error: String(err) };
+        }
+    },
+});
+
+// ── Copy File ─────────────────────────────────────────────────────────────────
+
+export const copyFile = tool({
+    description: "Copy a file or directory on the local filesystem. Directories are copied recursively.",
+    parameters: z.object({
+        source: z.string().describe("Absolute or relative path to the existing file/directory"),
+        destination: z.string().describe("Absolute or relative path to the new location"),
+    }),
+    // @ts-expect-error: Vercel AI SDK Zod inference bug
+    execute: async ({ source, destination }: any) => {
+        try {
+            if (!existsSync(source)) return { error: `Source not found: ${source}` };
+
+            const destDir = dirname(destination);
+            if (!existsSync(destDir)) mkdirSync(destDir, { recursive: true });
+
+            cpSync(source, destination, { recursive: true });
+            return { success: true, source, destination };
+        } catch (err) {
+            return { error: String(err) };
+        }
+    },
+});
+
+// ── Delete File ───────────────────────────────────────────────────────────────
+
+export const deleteFile = tool({
+    description: "Delete a file or directory on the local filesystem. Directories are deleted recursively.",
+    parameters: z.object({
+        path: z.string().describe("Absolute or relative path to the file/directory to delete"),
+    }),
+    // @ts-expect-error: Vercel AI SDK Zod inference bug
+    execute: async ({ path }: any) => {
+        try {
+            if (!existsSync(path)) return { error: `Path not found: ${path}` };
+
+            rmSync(path, { recursive: true, force: true });
+            return { success: true, path };
+        } catch (err) {
+            return { error: String(err) };
+        }
+    },
+});
+
+// ── Find Files ────────────────────────────────────────────────────────────────
+
+export const findFiles = tool({
+    description: "Search for files within a directory using a glob pattern.",
+    parameters: z.object({
+        directory: z.string().describe("Directory to start the search from"),
+        pattern: z.string().describe("Glob pattern to match (e.g., '**/*.ts', '*.md')"),
+    }),
+    // @ts-expect-error: Vercel AI SDK Zod inference bug
+    execute: async ({ directory, pattern }: any) => {
+        try {
+            if (!existsSync(directory)) return { error: `Directory not found: ${directory}` };
+
+            const glob = new Bun.Glob(pattern);
+            const matches = [];
+            // Cap to 500 matches to prevent output flooding
+            for await (const file of glob.scan({ cwd: directory })) {
+                matches.push(file);
+                if (matches.length >= 500) break;
+            }
+
+            return {
+                baseDir: directory,
+                pattern,
+                matchesFound: matches.length,
+                matches: matches.length === 500 ? [...matches, "...(truncated)"] : matches
+            };
+        } catch (err) {
+            return { error: String(err) };
+        }
+    }
+});
+
+export const systemTools = {
+    runBashCommand,
+    readFile,
+    writeFile,
+    listDirectory,
+    moveFile,
+    copyFile,
+    deleteFile,
+    findFiles
+};
