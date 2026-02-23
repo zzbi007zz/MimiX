@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+.bun/
+
+# Environment
+.env
+*.env.local
+
+# Google API credentials (keep out of git!)
+credentials.json
+token.json
+
+# Database
+data/
+
+# Logs
+logs/
+*.log
+
+# Build output
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
